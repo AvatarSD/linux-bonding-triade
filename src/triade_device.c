@@ -38,6 +38,24 @@ static int triade_stop(struct net_device *dev)
 	return 0;
 }
 
+/* ndo_uninit runs on EVERY unregister path, including netns destruction
+ * (which does NOT go through rtnl_link_ops .dellink). Putting cleanup here
+ * instead of .dellink prevents debugfs / percpu / rx_handler leaks when a
+ * triade master is killed because its containing netns went away. Bonding
+ * uses the same pattern via bond_uninit. RTNL is held.
+ */
+static void triade_uninit(struct net_device *dev)
+{
+	struct triade_priv *triade = netdev_priv(dev);
+
+	triade_debugfs_remove(triade);
+	triade_super_stop(triade);
+	triade_release_all_slaves(triade);
+	triade_framereg_destroy(triade);
+	free_percpu(triade->stats);
+	triade->stats = NULL;
+}
+
 /* Wrap a user multicast frame in place: insert an 8-byte triade_ctrl_hdr
  * between the L2 header and the L3 payload, rewrite the L2 ethertype to the
  * Triade control type, and stash the original ethertype inside the ctrl hdr.
@@ -144,6 +162,7 @@ static netdev_tx_t triade_xmit(struct sk_buff *skb, struct net_device *dev)
 const struct net_device_ops triade_netdev_ops = {
 	.ndo_open		= triade_open,
 	.ndo_stop		= triade_stop,
+	.ndo_uninit		= triade_uninit,
 	.ndo_start_xmit		= triade_xmit,
 	.ndo_add_slave		= triade_add_slave,
 	.ndo_del_slave		= triade_del_slave,

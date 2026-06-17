@@ -89,15 +89,12 @@ err_stats:
 
 static void triade_dellink(struct net_device *dev, struct list_head *head)
 {
-	struct triade_priv *triade = netdev_priv(dev);
-
-	triade_debugfs_remove(triade);
-	triade_super_stop(triade);
-	triade_release_all_slaves(triade);
-	triade_framereg_destroy(triade);
+	/* All teardown lives in ndo_uninit (triade_uninit in triade_device.c)
+	 * so it runs uniformly on both explicit `ip link del` and on netns
+	 * destruction. Here we just request the unregister, which fires
+	 * ndo_uninit synchronously.
+	 */
 	unregister_netdevice_queue(dev, head);
-	free_percpu(triade->stats);
-	triade->stats = NULL;
 }
 
 static struct rtnl_link_ops triade_link_ops __read_mostly = {
