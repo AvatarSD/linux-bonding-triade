@@ -1,0 +1,53 @@
+# /etc/network/interfaces — operator template for a triade ring node.
+#
+# Drop these stanzas at the bottom of /etc/network/interfaces BEFORE the
+# trailing  `source /etc/network/interfaces.d/*`  line. The PVE web UI
+# parser does not follow that source directive, so triade entries need to
+# live in the main file to show up under Datacenter > Node > Network.
+#
+# Per-node customisation:
+#   $SLAVE0, $SLAVE1   the two physical 10G ports facing the ring neighbours
+#   $TRIADE_IP         this node's address on triade0 (untagged)
+#   $CLUSTER_IP        this node's address on triade0.1000 (corosync ring0)
+#
+# Example concrete values from the candle cluster:
+#                     SLAVE0    SLAVE1     TRIADE_IP    CLUSTER_IP
+#   pve   (bnxt_en)   eno1np0   eno2np1    10.99.0.1    10.10.10.1
+#   stg   (ixgbe)     enp2s0f0  enp2s0f1   10.99.0.2    10.10.10.3
+#   think (ixgbe)     enp3s0f0  enp3s0f1   10.99.0.3    10.10.10.2
+
+# --- ring master (untagged) ---------------------------------------------------
+# Slave_a = $SLAVE0 inherits the master MAC, full RSS for frames-for-me.
+# Slave_b = $SLAVE1 also accepts master-MAC frames via the secondary unicast
+# filter that triade_add_slave installs (dev_uc_add) so RSS still works for
+# them; promisc covers relay-bound (not-for-me) frames. On ixgbe we collapse
+# slave_b to 1 RX queue to keep relay packets on a predictable CPU. bnxt_en
+# does the right thing with the secondary uc filter so no ethtool -L needed.
+auto triade0
+iface triade0 inet static
+        address $TRIADE_IP/24
+        mtu 8992
+        pre-up modprobe triade
+        pre-up ip link show triade0 >/dev/null 2>&1 || ip link add triade0 type triade
+        # bnxt_en hosts only: brief settle for bnxt_re GID setup vs our
+        # rx_handler_register. ixgbe hosts can omit this line.
+        pre-up sleep 2
+        pre-up ip link set $SLAVE0 mtu 9000
+        pre-up ip link set $SLAVE1 mtu 9000
+        # ixgbe hosts only — bnxt_en respects the secondary uc filter cleanly.
+        pre-up ethtool -L $SLAVE1 combined 1 || true
+        pre-up ip link set $SLAVE0 up
+        pre-up ip link set $SLAVE1 up
+        pre-up ip link set $SLAVE0 master triade0
+        pre-up ip link set $SLAVE1 master triade0
+        pre-up sysctl -q -w net.ipv4.conf.triade0.rp_filter=0 || true
+        post-up /usr/local/sbin/triade-xdp-load.sh triade0 >/dev/null 2>&1 || true
+        post-down ip link del triade0 || true
+
+# --- cluster sync VLAN child (corosync ring0) ---------------------------------
+# 802.1q tag 1000, carried inside the triade ring. MTU 8988 = 8992 - 4-byte tag.
+auto triade0.1000
+iface triade0.1000 inet static
+        address $CLUSTER_IP/24
+        mtu 8988
+        vlan-raw-device triade0

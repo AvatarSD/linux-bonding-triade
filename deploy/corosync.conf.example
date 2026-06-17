@@ -1,0 +1,56 @@
+# /etc/pve/corosync.conf — Proxmox cluster on the triade ring (3-node "candle").
+#
+# Edit via the documented Proxmox procedure:
+#   1. cp /etc/pve/corosync.conf /etc/pve/corosync.conf.new
+#   2. edit /etc/pve/corosync.conf.new
+#   3. bump config_version
+#   4. mv /etc/pve/corosync.conf.new /etc/pve/corosync.conf  (pmxcfs propagates)
+#   5. on each node: systemctl restart corosync   (parallel is fine; quorum
+#      re-forms in a few seconds; cluster I/O briefly stalls)
+#
+# Addresses are on triade0.1000 (VLAN 1000 child of the triade ring, see
+# deploy/interfaces.snippet). Migrating from a mgmt-LAN ring0 onto this one
+# is a two-step swap: first move the IP from vmbrN.1000 to triade0.1000 via
+# ifreload, then bump corosync config_version + restart.
+
+logging {
+  debug: off
+  to_syslog: yes
+}
+
+nodelist {
+  node {
+    name: pve
+    nodeid: 1
+    quorum_votes: 1
+    ring0_addr: 10.10.10.1
+  }
+  node {
+    name: stg
+    nodeid: 3
+    quorum_votes: 1
+    ring0_addr: 10.10.10.3
+  }
+  node {
+    name: think
+    nodeid: 2
+    quorum_votes: 3
+    ring0_addr: 10.10.10.2
+  }
+}
+
+quorum {
+  provider: corosync_votequorum
+}
+
+totem {
+  cluster_name: candle
+  config_version: 5
+  interface {
+    linknumber: 0
+  }
+  ip_version: ipv4-6
+  link_mode: passive
+  secauth: on
+  version: 2
+}
