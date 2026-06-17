@@ -141,7 +141,7 @@ static rx_handler_result_t triade_handle_ctrl(struct triade_port *port,
 	case TRIADE_CTRL_FLOOD:
 		fresh = triade_framereg_observe_flood(triade, originator, seq);
 		if (!fresh) {
-			atomic_long_inc(&triade->stats.rx_flood_dup);
+			TRIADE_STAT_INC(triade, rx_flood_dup);
 			kfree_skb(skb);
 			return RX_HANDLER_CONSUMED;
 		}
@@ -153,7 +153,7 @@ static rx_handler_result_t triade_handle_ctrl(struct triade_port *port,
 			clone = skb_clone(skb, GFP_ATOMIC);
 			if (clone) {
 				triade_relay_ctrl(peer, clone, ttl + 1);
-				atomic_long_inc(&triade->stats.rx_flood_relayed);
+				TRIADE_STAT_INC(triade, rx_flood_relayed);
 			}
 		}
 		if (triade_unwrap_flood(skb, inner_eth)) {
@@ -180,7 +180,7 @@ rx_handler_result_t triade_forward_rx(struct triade_port *port,
 
 	/* Self-discard: I originated this frame, it came back around the ring. */
 	if (unlikely(ether_addr_equal(eth->h_source, master->dev_addr))) {
-		atomic_long_inc(&triade->stats.rx_self_discard);
+		TRIADE_STAT_INC(triade, rx_self_discard);
 		kfree_skb(skb);
 		return RX_HANDLER_CONSUMED;
 	}
@@ -214,7 +214,7 @@ rx_handler_result_t triade_forward_rx(struct triade_port *port,
 		kfree_skb(skb);
 		return RX_HANDLER_CONSUMED;
 	}
-	atomic_long_inc(&triade->stats.rx_relayed);
+	TRIADE_STAT_INC(triade, rx_relayed);
 	triade_relay_unicast(peer, skb);
 	return RX_HANDLER_CONSUMED;
 }

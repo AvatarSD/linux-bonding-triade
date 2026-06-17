@@ -120,7 +120,7 @@ static netdev_tx_t triade_xmit(struct sk_buff *skb, struct net_device *dev)
 			kfree_skb(skb);
 			return NETDEV_TX_OK;
 		}
-		atomic_long_inc(&triade->stats.tx_flood);
+		TRIADE_STAT_INC(triade, tx_flood);
 
 		if (u0 && u1) {
 			struct sk_buff *clone = skb_clone(skb, GFP_ATOMIC);

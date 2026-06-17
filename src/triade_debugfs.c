@@ -21,20 +21,20 @@
 
 static struct dentry *triade_debugfs_root;
 
-#define S(field)	atomic_long_read(&triade->stats.field)
+#define S(field)	TRIADE_STAT_READ(triade, field)
 
 static int triade_stats_show(struct seq_file *s, void *unused)
 {
 	struct triade_priv *triade = s->private;
 
-	seq_printf(s, "rx_relayed         %ld\n", S(rx_relayed));
-	seq_printf(s, "rx_self_discard    %ld\n", S(rx_self_discard));
-	seq_printf(s, "rx_flood_relayed   %ld\n", S(rx_flood_relayed));
-	seq_printf(s, "rx_super           %ld\n", S(rx_super));
-	seq_printf(s, "rx_flood_dup       %ld\n", S(rx_flood_dup));
-	seq_printf(s, "tx_flood           %ld\n", S(tx_flood));
-	seq_printf(s, "tx_spilled         %ld\n", S(tx_spilled));
-	seq_printf(s, "node_aged_out      %ld\n", S(node_aged_out));
+	seq_printf(s, "rx_relayed         %llu\n", S(rx_relayed));
+	seq_printf(s, "rx_self_discard    %llu\n", S(rx_self_discard));
+	seq_printf(s, "rx_flood_relayed   %llu\n", S(rx_flood_relayed));
+	seq_printf(s, "rx_super           %llu\n", S(rx_super));
+	seq_printf(s, "rx_flood_dup       %llu\n", S(rx_flood_dup));
+	seq_printf(s, "tx_flood           %llu\n", S(tx_flood));
+	seq_printf(s, "tx_spilled         %llu\n", S(tx_spilled));
+	seq_printf(s, "node_aged_out      %llu\n", S(node_aged_out));
 	seq_printf(s, "nports             %u\n", triade->nports);
 	seq_printf(s, "node_count         %u\n",
 		   triade_framereg_node_count(triade));

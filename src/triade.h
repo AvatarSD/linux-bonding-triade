@@ -15,9 +15,11 @@
 #include <linux/atomic.h>
 #include <linux/if_ether.h>
 #include <linux/netdevice.h>
+#include <linux/percpu.h>
 #include <linux/skbuff.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
+#include <linux/u64_stats_sync.h>
 #include <linux/workqueue.h>
 
 #define TRIADE_MAX_PORTS	2	/* a ring node always has two neighbours */
@@ -39,20 +41,37 @@ enum triade_sched_mode {
 					 * with >=2 concurrent flows */
 };
 
-/* Forwarding-plane counters. Exposed via debugfs in a later milestone. */
-struct triade_stats {
-	atomic_long_t	rx_relayed;		/* unicast not-for-me, sent to peer */
-	atomic_long_t	rx_self_discard;	/* eth.src == my MAC, dropped */
-	atomic_long_t	rx_flood_relayed;	/* flood frames cloned to peer */
-	atomic_long_t	tx_flood;		/* local flood frames sent */
-	atomic_long_t	rx_super;		/* supervision frames accepted */
-	atomic_long_t	rx_flood_dup;		/* flood/super dropped by dedup */
-	atomic_long_t	node_aged_out;		/* node table evictions */
-	atomic_long_t	tx_spilled;		/* unicast moved off preferred port */
+/* Forwarding-plane counters. Per-CPU to avoid cacheline bouncing in the hot
+ * path; summed across CPUs on debugfs read.
+ */
+struct triade_pcpu_stats {
+	u64_stats_t		rx_relayed;		/* unicast not-for-me, sent to peer */
+	u64_stats_t		rx_self_discard;	/* eth.src == my MAC, dropped */
+	u64_stats_t		rx_flood_relayed;	/* flood frames cloned to peer */
+	u64_stats_t		tx_flood;		/* local flood frames sent */
+	u64_stats_t		rx_super;		/* supervision frames accepted */
+	u64_stats_t		rx_flood_dup;		/* flood/super dropped by dedup */
+	u64_stats_t		node_aged_out;		/* node table evictions */
+	u64_stats_t		tx_spilled;		/* unicast moved off preferred port */
+	struct u64_stats_sync	syncp;
 };
+
+#define TRIADE_STAT_INC(triade, field)					\
+	do {								\
+		struct triade_pcpu_stats *__s =				\
+			this_cpu_ptr((triade)->stats);			\
+		u64_stats_update_begin(&__s->syncp);			\
+		u64_stats_inc(&__s->field);				\
+		u64_stats_update_end(&__s->syncp);			\
+	} while (0)
 
 struct triade_priv;
 struct triade_node_table;	/* opaque - defined in triade_framereg.c */
+
+u64 triade_stat_read(const struct triade_priv *triade, size_t off);
+
+#define TRIADE_STAT_READ(triade, field) \
+	triade_stat_read((triade), offsetof(struct triade_pcpu_stats, field))
 
 /* One ring port: a slave netdev facing one neighbour. */
 struct triade_port {
@@ -70,7 +89,7 @@ struct triade_priv {
 	struct triade_port __rcu	*port[TRIADE_MAX_PORTS];
 	spinlock_t			lock;		/* serialises add/del slave */
 	u8				nports;
-	struct triade_stats		stats;
+	struct triade_pcpu_stats __percpu *stats;
 	struct triade_node_table	*nodes;		/* M3 node table */
 	struct delayed_work		super_work;	/* periodic supervision */
 	bool				running;	/* set in ndo_open */

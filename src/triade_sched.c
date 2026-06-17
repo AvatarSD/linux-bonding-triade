@@ -76,7 +76,7 @@ static struct triade_port *triade_sched_per_flow(struct triade_priv *triade,
 	alt_bk  = triade_port_backlog(alt);
 	if (pref_bk > TRIADE_SCHED_HIGHWATER && alt_bk * 2 < pref_bk) {
 		if (!test_and_set_bit(bucket, triade->flow_alt))
-			atomic_long_inc(&triade->stats.tx_spilled);
+			TRIADE_STAT_INC(triade, tx_spilled);
 		return alt;
 	}
 	return pref;
@@ -107,7 +107,7 @@ static struct triade_port *triade_sched_per_packet(struct triade_priv *triade,
 		pick_p1 = (atomic_inc_return(&triade->sched_rr) & 1u) != 0;
 
 	if (pick_p1)
-		atomic_long_inc(&triade->stats.tx_spilled);
+		TRIADE_STAT_INC(triade, tx_spilled);
 	return pick_p1 ? p1 : p0;
 }
 
@@ -121,7 +121,7 @@ static struct triade_port *triade_sched_flow_ecmp(struct triade_priv *triade,
 						  struct triade_port *p1)
 {
 	if (skb_get_hash(skb) & 1u) {
-		atomic_long_inc(&triade->stats.tx_spilled);
+		TRIADE_STAT_INC(triade, tx_spilled);
 		return p1;
 	}
 	return p0;

@@ -247,7 +247,7 @@ void triade_framereg_age(struct triade_priv *triade, unsigned int timeout_ms)
 			if (time_before(n->last_seen, limit)) {
 				hlist_del_rcu(&n->hnode);
 				kfree_rcu(n, rcu);
-				atomic_long_inc(&triade->stats.node_aged_out);
+				TRIADE_STAT_INC(triade, node_aged_out);
 			}
 		}
 	}

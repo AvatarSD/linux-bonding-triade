@@ -146,11 +146,11 @@ rx_handler_result_t triade_super_rx(struct triade_port *port,
 	fresh = triade_framereg_observe_super(triade, port->index, originator,
 					      seq, ttl);
 	if (!fresh) {
-		atomic_long_inc(&triade->stats.rx_flood_dup);
+		TRIADE_STAT_INC(triade, rx_flood_dup);
 		kfree_skb(skb);
 		return RX_HANDLER_CONSUMED;
 	}
-	atomic_long_inc(&triade->stats.rx_super);
+	TRIADE_STAT_INC(triade, rx_super);
 
 	/* Relay out the opposite port with TTL+1, unless that would loop back
 	 * (peer missing or no carrier).

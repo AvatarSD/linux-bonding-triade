@@ -14,10 +14,34 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
+#include <linux/percpu.h>
+#include <linux/u64_stats_sync.h>
 #include <linux/version.h>
 #include <net/rtnetlink.h>
 
 #include "triade.h"
+
+u64 triade_stat_read(const struct triade_priv *triade, size_t off)
+{
+	u64 total = 0;
+	int cpu;
+
+	for_each_possible_cpu(cpu) {
+		const struct triade_pcpu_stats *s =
+			per_cpu_ptr(triade->stats, cpu);
+		const u64_stats_t *counter = (const u64_stats_t *)
+			((const u8 *)s + off);
+		unsigned int start;
+		u64 v;
+
+		do {
+			start = u64_stats_fetch_begin(&s->syncp);
+			v = u64_stats_read(counter);
+		} while (u64_stats_fetch_retry(&s->syncp, start));
+		total += v;
+	}
+	return total;
+}
 
 /* rtnl_link_ops->newlink changed signature in 6.17: pre-6.17 takes the
  * (src_net, dev, tb, data, extack) tuple; 6.17+ wraps src_net/tb/data into
@@ -41,17 +65,26 @@ static int triade_newlink(struct net *src_net, struct net_device *dev,
 	triade->nports = 0;
 	triade->running = false;
 
+	triade->stats = alloc_percpu(struct triade_pcpu_stats);
+	if (!triade->stats)
+		return -ENOMEM;
+
 	err = triade_framereg_init(triade);
 	if (err)
-		return err;
+		goto err_stats;
 
 	err = register_netdevice(dev);
-	if (err) {
-		triade_framereg_destroy(triade);
-		return err;
-	}
+	if (err)
+		goto err_framereg;
 	triade_debugfs_add(triade);
 	return 0;
+
+err_framereg:
+	triade_framereg_destroy(triade);
+err_stats:
+	free_percpu(triade->stats);
+	triade->stats = NULL;
+	return err;
 }
 
 static void triade_dellink(struct net_device *dev, struct list_head *head)
@@ -63,6 +96,8 @@ static void triade_dellink(struct net_device *dev, struct list_head *head)
 	triade_release_all_slaves(triade);
 	triade_framereg_destroy(triade);
 	unregister_netdevice_queue(dev, head);
+	free_percpu(triade->stats);
+	triade->stats = NULL;
 }
 
 static struct rtnl_link_ops triade_link_ops __read_mostly = {
