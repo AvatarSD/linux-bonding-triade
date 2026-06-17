@@ -167,6 +167,19 @@ void triade_setup(struct net_device *dev)
 	dev->priv_flags |= IFF_UNICAST_FLT;
 	dev->flags |= IFF_MASTER;
 
+	/* Advertise pass-through of common HW offloads. Without these, the
+	 * stack runs csum + GSO segmentation in software when packets cross
+	 * triade0 - that was the single biggest CPU sink on the sender at
+	 * 13 Gb/s (perf: csum_partial_copy_generic ~12 %). The slaves do TSO
+	 * and HW checksum natively; we just have to let the kernel push
+	 * GSO-formed super-packets down to triade_xmit and forward them to
+	 * the slave's dev_queue_xmit unchanged.
+	 */
+	dev->hw_features = NETIF_F_SG | NETIF_F_HW_CSUM |
+			   NETIF_F_GSO_SOFTWARE | NETIF_F_HIGHDMA;
+	dev->features |= dev->hw_features;
+	dev->vlan_features = dev->hw_features;
+
 	/* Headroom for the M3 flood wrap so we rarely have to skb_cow(). */
 	dev->needed_headroom = TRIADE_CTRL_HDR_LEN;
 
