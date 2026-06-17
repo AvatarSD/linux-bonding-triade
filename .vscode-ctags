@@ -1,0 +1,43 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_OUTPUT_EXCMD	mixed	/number, pattern, mixed, or combineV2/
+!_TAG_OUTPUT_FILESEP	slash	/slash or backslash/
+!_TAG_OUTPUT_MODE	u-ctags	/u-ctags or e-ctags/
+!_TAG_PATTERN_LENGTH_LIMIT	96	/0 for no limit/
+!_TAG_PROC_CWD	/home/sd/prj/linux-bonding-triade/	//
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	5.9.0	//
+KDIR	Makefile	/^KDIR ?= \/lib\/modules\/$(shell uname -r)\/build$/;"	m
+TRIADE_MAX_PORTS	src/triade.h	/^#define TRIADE_MAX_PORTS	/;"	d
+_TRIADE_H	src/triade.h	/^#define _TRIADE_H$/;"	d
+__read_mostly	src/triade_main.c	/^static struct rtnl_link_ops triade_link_ops __read_mostly = {$/;"	v	typeref:struct:rtnl_link_ops triade_link_ops	file:
+all	Makefile	/^all:$/;"	t
+ccflags-y	Makefile	/^ccflags-y := -I$(src)\/src$/;"	m
+clean	Makefile	/^clean:$/;"	t
+dev	src/triade.h	/^	struct net_device	*dev;		\/* the master (triade0) *\/$/;"	m	struct:triade_priv	typeref:struct:net_device *
+dev	src/triade.h	/^	struct net_device	*dev;		\/* the slave netdev *\/$/;"	m	struct:triade_port	typeref:struct:net_device *
+index	src/triade.h	/^	u8			index;		\/* 0 or 1 *\/$/;"	m	struct:triade_port	typeref:typename:u8
+lock	src/triade.h	/^	spinlock_t		lock;		\/* serialises add\/del slave *\/$/;"	m	struct:triade_priv	typeref:typename:spinlock_t
+nports	src/triade.h	/^	u8			nports;$/;"	m	struct:triade_priv	typeref:typename:u8
+port	src/triade.h	/^	struct triade_port __rcu *port[TRIADE_MAX_PORTS];$/;"	m	struct:triade_priv	typeref:struct:triade_port __rcu * []
+rcu	src/triade.h	/^	struct rcu_head		rcu;$/;"	m	struct:triade_port	typeref:struct:rcu_head
+triade	src/triade.h	/^	struct triade_priv	*triade;	\/* back-pointer to the master *\/$/;"	m	struct:triade_port	typeref:struct:triade_priv *
+triade-objs	Makefile	/^triade-objs := src\/triade_main.o src\/triade_device.o src\/triade_slave.o$/;"	m
+triade_add_slave	src/triade_slave.c	/^int triade_add_slave(struct net_device *dev, struct net_device *slave_dev,$/;"	f	typeref:typename:int
+triade_del_slave	src/triade_slave.c	/^int triade_del_slave(struct net_device *dev, struct net_device *slave_dev)$/;"	f	typeref:typename:int
+triade_dellink	src/triade_main.c	/^static void triade_dellink(struct net_device *dev, struct list_head *head)$/;"	f	typeref:typename:void	file:
+triade_exit	src/triade_main.c	/^static void __exit triade_exit(void)$/;"	f	typeref:typename:void __exit	file:
+triade_handle_frame	src/triade_slave.c	/^static rx_handler_result_t triade_handle_frame(struct sk_buff **pskb)$/;"	f	typeref:typename:rx_handler_result_t	file:
+triade_init	src/triade_main.c	/^static int __init triade_init(void)$/;"	f	typeref:typename:int __init	file:
+triade_netdev_ops	src/triade_device.c	/^const struct net_device_ops triade_netdev_ops = {$/;"	v	typeref:typename:const struct net_device_ops
+triade_newlink	src/triade_main.c	/^static int triade_newlink(struct net_device *dev,$/;"	f	typeref:typename:int	file:
+triade_open	src/triade_device.c	/^static int triade_open(struct net_device *dev)$/;"	f	typeref:typename:int	file:
+triade_port	src/triade.h	/^struct triade_port {$/;"	s
+triade_priv	src/triade.h	/^struct triade_priv {$/;"	s
+triade_release_all_slaves	src/triade_slave.c	/^void triade_release_all_slaves(struct triade_priv *triade)$/;"	f	typeref:typename:void
+triade_release_port	src/triade_slave.c	/^static void triade_release_port(struct triade_priv *triade,$/;"	f	typeref:typename:void	file:
+triade_setup	src/triade_device.c	/^void triade_setup(struct net_device *dev)$/;"	f	typeref:typename:void
+triade_stop	src/triade_device.c	/^static int triade_stop(struct net_device *dev)$/;"	f	typeref:typename:int	file:
+triade_xmit	src/triade_device.c	/^static netdev_tx_t triade_xmit(struct sk_buff *skb, struct net_device *dev)$/;"	f	typeref:typename:netdev_tx_t	file:
