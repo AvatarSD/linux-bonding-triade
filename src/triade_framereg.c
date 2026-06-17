@@ -254,6 +254,28 @@ void triade_framereg_age(struct triade_priv *triade, unsigned int timeout_ms)
 	spin_unlock_bh(&t->lock);
 }
 
+/* Clear the @port_idx column across every node so the scheduler's pref-port
+ * query stops returning a port that just lost carrier. Supervision will
+ * repopulate the column once carrier is back and the neighbour's frames
+ * arrive again.
+ */
+void triade_framereg_invalidate_port(struct triade_priv *triade, u8 port_idx)
+{
+	struct triade_node_table *t = triade->nodes;
+	struct triade_node *n;
+	int i;
+
+	if (port_idx >= TRIADE_MAX_PORTS || !t)
+		return;
+
+	spin_lock_bh(&t->lock);
+	for (i = 0; i < TRIADE_NODE_HASH_SIZE; i++) {
+		hlist_for_each_entry(n, &t->bucket[i], hnode)
+			WRITE_ONCE(n->hop_via_port[port_idx], 0xFFFF);
+	}
+	spin_unlock_bh(&t->lock);
+}
+
 /* Return the port index (0/1) with the shorter learned hop distance to @dst,
  * or -1 if @dst isn't in the node table. Ties go to port 0.
  */

@@ -128,6 +128,16 @@ void triade_super_stop(struct triade_priv *triade)
 	cancel_delayed_work_sync(&triade->super_work);
 }
 
+void triade_super_kick(struct triade_priv *triade)
+{
+	if (!READ_ONCE(triade->running))
+		return;
+	/* Re-arm the existing timer to fire ASAP; the work function reads
+	 * triade->running and reschedules itself on the normal cadence.
+	 */
+	mod_delayed_work(system_wq, &triade->super_work, 0);
+}
+
 /* Called from triade_forward_rx after it has parsed the control header and
  * confirmed type == SUPERVISION. Skb still has the control header + payload
  * sitting at skb->data (no L2 header — eth_type_trans pulled it).

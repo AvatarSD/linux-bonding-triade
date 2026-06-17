@@ -108,15 +108,39 @@ static struct rtnl_link_ops triade_link_ops __read_mostly = {
 	.dellink	= triade_dellink,
 };
 
-/* Slave-port link transitions. The forwarding plane checks carrier inline
- * (triade_port_usable) so this notifier just logs and counts; the supervision
- * timeout in the node table does the heavy lifting for non-local breaks.
+/* Dual-signal convergence (ADR-0003): local NETDEV_UP/DOWN is the fast half,
+ * supervision timeout in the node table is the slow half for non-local breaks.
+ * The TX path naturally avoids a port without carrier (triade_port_usable
+ * gates pick), so the work here is to keep the framereg consistent with
+ * carrier state instead of letting stale hop information mislead pref_port,
+ * and to kick supervision so neighbours converge faster than 1Hz aging.
  */
+static int triade_slave_port_idx(struct triade_priv *triade,
+				 const struct net_device *slave)
+{
+	int i;
+
+	rcu_read_lock();
+	for (i = 0; i < TRIADE_MAX_PORTS; i++) {
+		const struct triade_port *p = rcu_dereference(triade->port[i]);
+
+		if (p && p->dev == slave) {
+			rcu_read_unlock();
+			return i;
+		}
+	}
+	rcu_read_unlock();
+	return -1;
+}
+
 static int triade_netdev_event(struct notifier_block *nb,
 			       unsigned long event, void *ptr)
 {
 	struct net_device *slave = netdev_notifier_info_to_dev(ptr);
 	struct net_device *master;
+	struct triade_priv *triade;
+	int port_idx;
+	bool up;
 
 	if (!slave)
 		return NOTIFY_DONE;
@@ -128,8 +152,27 @@ static int triade_netdev_event(struct notifier_block *nb,
 	case NETDEV_UP:
 	case NETDEV_DOWN:
 	case NETDEV_CHANGE:
-		netdev_info(master, "slave %s: %s\n", slave->name,
-			    netif_carrier_ok(slave) ? "carrier up" : "carrier down");
+		triade = netdev_priv(master);
+		port_idx = triade_slave_port_idx(triade, slave);
+		up = netif_carrier_ok(slave);
+		netdev_info(master, "slave %s (port %d): carrier %s\n",
+			    slave->name, port_idx, up ? "up" : "down");
+		if (port_idx < 0)
+			break;
+		if (!up) {
+			/* Forget the hops we learned via this port so the
+			 * scheduler stops preferring it the instant carrier
+			 * drops, instead of waiting for the 3 s aging timeout.
+			 */
+			triade_framereg_invalidate_port(triade,
+							(u8)port_idx);
+		} else {
+			/* New carrier: nudge a supervision burst out so the
+			 * neighbour learns the (port_idx, hop=1) entry without
+			 * waiting up to one whole TRIADE_SUPER_INTERVAL_MS.
+			 */
+			triade_super_kick(triade);
+		}
 		break;
 	default:
 		break;

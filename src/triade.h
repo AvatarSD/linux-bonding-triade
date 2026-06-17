@@ -133,6 +133,11 @@ u16 triade_framereg_next_flood_seq(struct triade_priv *triade);
 void triade_framereg_age(struct triade_priv *triade, unsigned int timeout_ms);
 unsigned int triade_framereg_node_count(struct triade_priv *triade);
 int triade_framereg_pref_port(struct triade_priv *triade, const u8 *dst);
+/* Invalidate the hop column for @port_idx across every node, called when the
+ * local port goes carrier-down so the scheduler stops preferring it
+ * instantly (without waiting for supervision-timeout aging). Idempotent.
+ */
+void triade_framereg_invalidate_port(struct triade_priv *triade, u8 port_idx);
 void triade_framereg_foreach(struct triade_priv *triade,
 			     void (*cb)(const u8 *mac,
 					const u16 hop[TRIADE_MAX_PORTS],
@@ -154,6 +159,11 @@ struct triade_port *triade_sched_pick(struct triade_priv *triade,
 /* triade_super.c - periodic supervision sender + RX (M3) */
 void triade_super_start(struct triade_priv *triade);
 void triade_super_stop(struct triade_priv *triade);
+/* Re-arm the supervision timer to fire immediately so neighbours learn about
+ * a local state change without waiting for the next 1Hz tick. Safe to call
+ * even when supervision isn't running.
+ */
+void triade_super_kick(struct triade_priv *triade);
 rx_handler_result_t triade_super_rx(struct triade_port *port,
 				    struct sk_buff *skb, u8 ttl, u16 seq,
 				    const u8 *originator);
