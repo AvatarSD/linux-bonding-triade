@@ -50,7 +50,7 @@ mountpoint -q /sys/fs/bpf || mount -t bpf bpffs /sys/fs/bpf
 mkdir -p "$PIN"
 
 echo "== load + pin program and maps =="
-bpftool prog loadall "$OBJ" "$PIN" type xdp
+bpftool prog loadall "$OBJ" "$PIN" type xdp pinmaps "$PIN"
 
 # Build hex blobs for bpftool map update. Keys/values are little-endian on x86.
 hex_u32_le() {
