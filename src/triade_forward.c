@@ -178,8 +178,13 @@ rx_handler_result_t triade_forward_rx(struct triade_port *port,
 	const struct ethhdr *eth = eth_hdr(skb);
 	struct triade_port *peer;
 
-	/* Self-discard: I originated this frame, it came back around the ring. */
-	if (unlikely(ether_addr_equal(eth->h_source, master->dev_addr))) {
+	/* Self-discard: I originated this frame, it came back around the ring.
+	 * "I" is the master MAC or - when triade0 is bridged - any behind-bridge
+	 * local MAC (VM tap, per-VLAN SVI, ...). Without the localreg half, a
+	 * looped frame carrying a foreign local source would circle forever.
+	 */
+	if (unlikely(ether_addr_equal(eth->h_source, master->dev_addr) ||
+		     triade_localreg_is_local(triade, eth->h_source))) {
 		TRIADE_STAT_INC(triade, rx_self_discard);
 		kfree_skb(skb);
 		return RX_HANDLER_CONSUMED;
@@ -200,7 +205,7 @@ rx_handler_result_t triade_forward_rx(struct triade_port *port,
 		return RX_HANDLER_ANOTHER;
 	}
 
-	/* Unicast for me: deliver up. */
+	/* Unicast for the master's own stack: deliver up as PACKET_HOST. */
 	if (ether_addr_equal(eth->h_dest, master->dev_addr)) {
 		skb->pkt_type = PACKET_HOST;
 		dev_sw_netstats_rx_add(master, skb->len);
@@ -208,7 +213,24 @@ rx_handler_result_t triade_forward_rx(struct triade_port *port,
 		return RX_HANDLER_ANOTHER;
 	}
 
-	/* Unicast not for me: pass-through to the opposite ring port. */
+	/* Unicast for a behind-bridge local MAC: deliver up on the master so the
+	 * bridge above triade0 forwards it to the right local port. pkt_type is
+	 * left as eth_type_trans set it (PACKET_OTHERHOST) - we must NOT mark it
+	 * PACKET_HOST, or the frame would be stolen by the master's IP stack
+	 * instead of being bridged onward. This is the black-hole fix: under the
+	 * old dst==master-only test these frames fell through to pass-through and
+	 * were relayed back onto the ring, never reaching the local port.
+	 */
+	if (triade_localreg_is_local(triade, eth->h_dest)) {
+		TRIADE_STAT_INC(triade, rx_local_deliver);
+		dev_sw_netstats_rx_add(master, skb->len);
+		skb->dev = master;
+		return RX_HANDLER_ANOTHER;
+	}
+
+	/* Unicast genuinely not for this node: pass-through to the opposite ring
+	 * port (transit to the next hop).
+	 */
 	if (!peer) {
 		DEV_STATS_INC(master, rx_dropped);
 		kfree_skb(skb);

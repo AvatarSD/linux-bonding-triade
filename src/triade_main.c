@@ -73,12 +73,18 @@ static int triade_newlink(struct net *src_net, struct net_device *dev,
 	if (err)
 		goto err_stats;
 
-	err = register_netdevice(dev);
+	err = triade_localreg_init(triade);
 	if (err)
 		goto err_framereg;
+
+	err = register_netdevice(dev);
+	if (err)
+		goto err_localreg;
 	triade_debugfs_add(triade);
 	return 0;
 
+err_localreg:
+	triade_localreg_destroy(triade);
 err_framereg:
 	triade_framereg_destroy(triade);
 err_stats:

@@ -51,6 +51,7 @@ struct triade_pcpu_stats {
 	u64_stats_t		tx_flood;		/* local flood frames sent */
 	u64_stats_t		rx_super;		/* supervision frames accepted */
 	u64_stats_t		rx_flood_dup;		/* flood/super dropped by dedup */
+	u64_stats_t		rx_local_deliver;	/* unicast to a behind-bridge local MAC */
 	u64_stats_t		node_aged_out;		/* node table evictions */
 	u64_stats_t		tx_spilled;		/* unicast moved off preferred port */
 	struct u64_stats_sync	syncp;
@@ -67,6 +68,7 @@ struct triade_pcpu_stats {
 
 struct triade_priv;
 struct triade_node_table;	/* opaque - defined in triade_framereg.c */
+struct triade_local_table;	/* opaque - defined in triade_localreg.c */
 
 u64 triade_stat_read(const struct triade_priv *triade, size_t off);
 
@@ -91,6 +93,7 @@ struct triade_priv {
 	u8				nports;
 	struct triade_pcpu_stats __percpu *stats;
 	struct triade_node_table	*nodes;		/* M3 node table */
+	struct triade_local_table	*locals;	/* behind-bridge local MACs */
 	struct delayed_work		super_work;	/* periodic supervision */
 	bool				running;	/* set in ndo_open */
 	struct dentry			*debugfs_dir;	/* per-master debugfs */
@@ -102,6 +105,10 @@ struct triade_priv {
 
 #define TRIADE_SUPER_INTERVAL_MS	1000
 #define TRIADE_NODE_TIMEOUT_MS		3000
+/* Local-MAC aging: much slower than the node timeout - a behind-bridge MAC can
+ * legitimately stay quiet for a while. Matches the Linux bridge FDB default.
+ */
+#define TRIADE_LOCAL_TIMEOUT_MS		300000
 
 /* triade_slave.c */
 int triade_add_slave(struct net_device *dev, struct net_device *slave_dev,
@@ -144,7 +151,23 @@ void triade_framereg_foreach(struct triade_priv *triade,
 					unsigned long last_seen, void *ctx),
 			     void *ctx);
 
-/* triade_debugfs.c - /sys/kernel/debug/triade/<ifname>/{stats,nodes} */
+/* triade_localreg.c - behind-bridge local-MAC learning (bridged-master fix) */
+int triade_localreg_init(struct triade_priv *triade);
+void triade_localreg_destroy(struct triade_priv *triade);
+/* Learn @mac as local (a source MAC egressing triade0). Lockless on the hot
+ * "already known" path; first sighting takes the table lock.
+ */
+void triade_localreg_learn(struct triade_priv *triade, const u8 *mac);
+/* True if @mac belongs to this node (a behind-bridge local port). */
+bool triade_localreg_is_local(struct triade_priv *triade, const u8 *mac);
+void triade_localreg_age(struct triade_priv *triade, unsigned int timeout_ms);
+unsigned int triade_localreg_count(struct triade_priv *triade);
+void triade_localreg_foreach(struct triade_priv *triade,
+			     void (*cb)(const u8 *mac, unsigned long last_seen,
+					void *ctx),
+			     void *ctx);
+
+/* triade_debugfs.c - /sys/kernel/debug/triade/<ifname>/{stats,nodes,locals} */
 int triade_debugfs_module_init(void);
 void triade_debugfs_module_exit(void);
 int triade_debugfs_add(struct triade_priv *triade);

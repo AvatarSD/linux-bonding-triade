@@ -6,28 +6,34 @@
  * generic XDP on anything that doesn't speak it, including thunderbolt-net -
  * where the software fallback in the kernel module remains the real path).
  *
- * The relay does one thing: turn pass-through unicast into XDP_REDIRECT to
- * the peer port. Everything else goes XDP_PASS, so the kernel module owns
+ * The relay's original job was to turn pass-through unicast into XDP_REDIRECT
+ * to the peer port, sending everything else XDP_PASS so the kernel module owns
  * supervision, dedup, flood, local delivery and the local TX scheduler.
+ *
+ * BRIDGED-MASTER FIX (docs/adr/0006): the redirect fast path decided "local
+ * vs pass-through" purely from `dst-MAC == my node MAC`. That is only valid
+ * when the node's identity is the single master MAC. When triade0 is enslaved
+ * into a bridge (Proxmox vmbr0 trunking VLANs across the ring), local delivery
+ * targets are *behind-bridge* MACs (VM taps, per-VLAN SVIs) that are NOT the
+ * master MAC - so the redirect wrongly bounced them back onto the ring
+ * (black-hole) and never delivered them locally.
+ *
+ * XDP cannot see the kernel's learned local-MAC set without the deferred
+ * kernel->map sync (ADR-0005 M5.5), so until that lands the redirect is
+ * unsafe. This program now DEFERS every unicast to the kernel's software
+ * forwarding plane, which learns local MACs from TX egress and does the
+ * correct self-discard / local-deliver / pass-through decision. Only the two
+ * MAC-invariant fast decisions stay in XDP.
  *
  * Decision tree, per RX frame on ingress port P:
  *
  *   ether_type == TRIADE_ETH_P_CTRL .. PASS  (kernel: supervision / flood)
  *   src-MAC    == my node MAC ........ DROP  (self-discard; circled the ring)
- *   dst-MAC    == my node MAC ........ PASS  (local delivery)
- *   dst-MAC    is multicast .......... PASS  (kernel: dedup + flood relay)
- *   otherwise ........................ REDIRECT to cfg.peer_ifindex
+ *   otherwise ........................ PASS  (kernel: local-MAC-aware forward)
  *
- * Userspace (tools/triade-xdp-load.sh) reads triade0's MAC and its two
- * slaves' ifindexes, then populates:
- *
- *   triade_config[port_ifindex] = { my MAC, peer ifindex }
- *   triade_redirect[peer_ifindex] = peer_ifindex
- *
- * No per-frame map update is needed for the v1 ring: pass-through always
- * goes to the opposite port. Kernel-side node-table sync for richer
- * decisions (e.g. multi-hop redirect) is deferred to M5.5 - see
- * docs/adr/0005-xdp-map-sync.md.
+ * The `triade_redirect` map + cfg.peer_ifindex are left populated by the
+ * loader so the redirect can be re-enabled unchanged once the M5.5 sync feeds
+ * XDP the local-MAC set (then: PASS if dst is local, REDIRECT peer otherwise).
  */
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
@@ -84,15 +90,14 @@ int triade_xdp_relay(struct xdp_md *ctx)
 		return XDP_PASS;
 
 	if (mac_eq(eth->h_source, cfg->mac))
-		return XDP_DROP;	/* self-discard */
+		return XDP_DROP;	/* self-discard (pinned-MAC / corosync loop) */
 
-	if (mac_eq(eth->h_dest, cfg->mac))
-		return XDP_PASS;	/* deliver locally */
-
-	if (eth->h_dest[0] & 1)
-		return XDP_PASS;	/* multicast: kernel does dedup + relay */
-
-	return bpf_redirect_map(&triade_redirect, cfg->peer_ifindex, 0);
+	/* Bridged-master fix (ADR-0006): defer all remaining unicast/multicast
+	 * to the kernel software plane, which knows the behind-bridge local-MAC
+	 * set and does the correct self-discard / local-deliver / pass-through.
+	 * The redirect fast path returns once XDP has the local set (M5.5).
+	 */
+	return XDP_PASS;
 }
 
 char _license[] SEC("license") = "GPL";

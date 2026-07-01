@@ -18,8 +18,8 @@ KBUILD_ARGS := ARCH=$(ARCH) CROSS_COMPILE= CC=$(CC)
 
 obj-m += triade.o
 triade-objs := src/triade_main.o src/triade_device.o src/triade_slave.o \
-	       src/triade_forward.o src/triade_framereg.o src/triade_super.o \
-	       src/triade_sched.o src/triade_debugfs.o
+	       src/triade_forward.o src/triade_framereg.o src/triade_localreg.o \
+	       src/triade_super.o src/triade_sched.o src/triade_debugfs.o
 
 # Let the build find headers in src/ relative to each object.
 ccflags-y := -I$(src)/src

@@ -32,12 +32,15 @@ static int triade_stats_show(struct seq_file *s, void *unused)
 	seq_printf(s, "rx_flood_relayed   %llu\n", S(rx_flood_relayed));
 	seq_printf(s, "rx_super           %llu\n", S(rx_super));
 	seq_printf(s, "rx_flood_dup       %llu\n", S(rx_flood_dup));
+	seq_printf(s, "rx_local_deliver   %llu\n", S(rx_local_deliver));
 	seq_printf(s, "tx_flood           %llu\n", S(tx_flood));
 	seq_printf(s, "tx_spilled         %llu\n", S(tx_spilled));
 	seq_printf(s, "node_aged_out      %llu\n", S(node_aged_out));
 	seq_printf(s, "nports             %u\n", triade->nports);
 	seq_printf(s, "node_count         %u\n",
 		   triade_framereg_node_count(triade));
+	seq_printf(s, "local_count        %u\n",
+		   triade_localreg_count(triade));
 	return 0;
 }
 DEFINE_SHOW_ATTRIBUTE(triade_stats);
@@ -76,6 +79,28 @@ static int triade_nodes_show(struct seq_file *s, void *unused)
 	return 0;
 }
 DEFINE_SHOW_ATTRIBUTE(triade_nodes);
+
+static void local_cb(const u8 *mac, unsigned long last_seen, void *ctx)
+{
+	struct seq_file *s = ctx;
+	unsigned int age_ms = jiffies_to_msecs(jiffies - last_seen);
+
+	seq_printf(s, "%pM  age_ms=%u\n", mac, age_ms);
+}
+
+/* The behind-bridge local-MAC set learned from TX egress (ADR-0006). Each
+ * entry is a MAC this node delivers locally / self-discards, in addition to
+ * the master address.
+ */
+static int triade_locals_show(struct seq_file *s, void *unused)
+{
+	struct triade_priv *triade = s->private;
+
+	seq_puts(s, "# MAC                age_ms\n");
+	triade_localreg_foreach(triade, local_cb, s);
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(triade_locals);
 
 static int triade_mode_get(void *data, u64 *val)
 {
@@ -121,6 +146,8 @@ int triade_debugfs_add(struct triade_priv *triade)
 			    &triade_stats_fops);
 	debugfs_create_file("nodes", 0444, triade->debugfs_dir, triade,
 			    &triade_nodes_fops);
+	debugfs_create_file("locals", 0444, triade->debugfs_dir, triade,
+			    &triade_locals_fops);
 	debugfs_create_file_unsafe("sched_mode", 0644, triade->debugfs_dir,
 				   triade, &triade_mode_fops);
 	return 0;

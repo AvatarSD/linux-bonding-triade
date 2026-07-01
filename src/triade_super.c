@@ -102,6 +102,7 @@ static void triade_super_work_fn(struct work_struct *w)
 
 	triade_super_send(triade);
 	triade_framereg_age(triade, TRIADE_NODE_TIMEOUT_MS);
+	triade_localreg_age(triade, TRIADE_LOCAL_TIMEOUT_MS);
 
 	schedule_delayed_work(&triade->super_work,
 			      msecs_to_jiffies(TRIADE_SUPER_INTERVAL_MS));

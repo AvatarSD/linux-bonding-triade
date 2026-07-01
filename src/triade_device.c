@@ -52,6 +52,7 @@ static void triade_uninit(struct net_device *dev)
 	triade_super_stop(triade);
 	triade_release_all_slaves(triade);
 	triade_framereg_destroy(triade);
+	triade_localreg_destroy(triade);
 	free_percpu(triade->stats);
 	triade->stats = NULL;
 }
@@ -115,6 +116,14 @@ static netdev_tx_t triade_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct triade_port *p0, *p1, *u0, *u1;
 	const struct ethhdr *eth = eth_hdr(skb);
 	bool flood = is_multicast_ether_addr(eth->h_dest);
+
+	/* Every source MAC leaving triade0 is local (either the master's own
+	 * stack or a port behind the bridge that triade0 is enslaved in). Learn
+	 * it so the RX path can self-discard our looped frames and deliver
+	 * frames addressed to us, even when our MAC isn't the master's. Lockless
+	 * for already-known MACs; see triade_localreg.c.
+	 */
+	triade_localreg_learn(triade, eth->h_source);
 
 	rcu_read_lock();
 	p0 = rcu_dereference(triade->port[0]);
